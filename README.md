@@ -1,192 +1,286 @@
-# Vaultum SDK for PHP
+# Vaultum PHP SDK
 
-PHP SDK for the Vaultum cross-chain account abstraction wallet.
+![Tests](https://github.com/vaultum/sdk-php/workflows/PHP%20SDK%20Tests/badge.svg)
+[![Latest Stable Version](https://poser.pugx.org/vaultum/sdk/v)](https://packagist.org/packages/vaultum/sdk)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-## Requirements
+## 📦 Installation
 
-- PHP 8.3+
-- Composer
-
-## Installation
+Install via Composer:
 
 ```bash
-composer require vaultum/sdk-php
+composer require vaultum/sdk
 ```
 
-## Usage
-
-### Basic Setup
+## 🚀 Quick Start
 
 ```php
 <?php
+require 'vendor/autoload.php';
 
 use Vaultum\SDK\Client;
+use Vaultum\SDK\Enums\Chain;
 
-$client = new Client('https://api.vaultum.io', [
-    'headers' => [
-        'X-API-Key' => 'your-api-key' // Optional
-    ],
-    'timeout' => 30 // Optional, defaults to 30 seconds
+// Initialize client
+$client = new Client(
+    'https://api.vaultum.app',
+    Chain::ETHEREUM
+);
+
+// Create a smart account
+$account = $client->createAccount(
+    owner: '0xYourAddress',
+    modules: ['sessionKeys', 'spendingLimits']
+);
+
+// Build a user operation
+$userOp = $client->buildUserOperation([
+    'account' => $account->address,
+    'to' => '0xRecipient',
+    'value' => '1000000000000000000', // 1 ETH
+    'data' => '0x',
+]);
+
+// Submit the operation
+$result = $client->submitUserOperation($userOp);
+
+// Wait for confirmation
+$receipt = $client->waitForOperation($result->id);
+```
+
+## ✨ Features
+
+- **Type Safety** - Full PHP 8.2+ type hints and enums
+- **PSR Compliance** - PSR-4 autoloading, PSR-7 HTTP
+- **Account Abstraction** - ERC-4337 UserOperation support
+- **Session Keys** - Temporary key management
+- **Gas Abstraction** - Paymaster integration
+- **Multi-chain** - Support for multiple EVM chains
+- **Async Support** - Compatible with ReactPHP/Amp
+
+## 📚 API Reference
+
+### Client
+
+The main client for interacting with Vaultum.
+
+```php
+use Vaultum\SDK\Client;
+use Vaultum\SDK\Enums\Chain;
+
+$client = new Client(
+    string $apiUrl,
+    Chain $chain,
+    ?string $apiKey = null
+);
+```
+
+### Account Management
+
+#### Create Account
+
+```php
+$account = $client->createAccount(
+    string $owner,
+    array $modules = [],
+    ?string $salt = null
+);
+```
+
+#### Get Account
+
+```php
+$account = $client->getAccount(string $address);
+```
+
+### User Operations
+
+#### Build UserOperation
+
+```php
+use Vaultum\SDK\DTO\UserOperation;
+
+$userOp = $client->buildUserOperation([
+    'account' => '0x...',
+    'to' => '0x...',
+    'value' => '1000000000000000000',
+    'data' => '0x',
 ]);
 ```
 
-### Get a Quote
-
-```php
-use Vaultum\SDK\DTO\QuoteRequest;
-use Vaultum\SDK\Enums\Chain;
-
-$request = new QuoteRequest(
-    Chain::ETHEREUM,
-    Chain::POLYGON,
-    '0x0000000000000000000000000000000000000000', // Native token
-    '1000000000000000000' // 1 ETH in wei
-);
-
-$quote = $client->quoteOp($request);
-
-echo "Estimated fee: {$quote->estimatedFee}\n";
-echo "Route: " . implode(' -> ', $quote->route->path) . "\n";
-echo "Estimated time: {$quote->route->estimatedTime}s\n";
-```
-
-### Submit a UserOperation
+#### Submit UserOperation
 
 ```php
 use Vaultum\SDK\DTO\SubmitRequest;
-use Vaultum\SDK\DTO\UserOperation;
-use Vaultum\SDK\Enums\Chain;
-
-$userOp = new UserOperation(
-    sender: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0',
-    nonce: '0',
-    initCode: '0x',
-    callData: '0xb61d27f6...',
-    callGasLimit: '100000',
-    verificationGasLimit: '100000',
-    preVerificationGas: '21000',
-    maxFeePerGas: '1000000000',
-    maxPriorityFeePerGas: '1000000000',
-    paymasterAndData: '0x'
-);
 
 $request = new SubmitRequest(
-    Chain::ETHEREUM,
-    $userOp,
-    '0x...' // 65 bytes signature
+    chain: Chain::ETHEREUM,
+    userOp: $userOp,
+    signature: $signature
 );
 
-$submission = $client->submitOp($request);
-
-echo "Operation ID: {$submission->id}\n";
+$response = $client->submitOperation($request);
+echo "Operation ID: " . $response->id;
 ```
 
-### Check Operation Status
+#### Wait for Operation
 
 ```php
-$status = $client->getOpStatus('550e8400-e29b-41d4-a716-446655440000');
+use Vaultum\SDK\WaitForOp;
 
-echo "State: {$status->state->value}\n";
-if ($status->txHash) {
-    echo "Transaction hash: {$status->txHash}\n";
-}
+$result = WaitForOp::run(
+    $client,
+    $operationId,
+    intervalMs: 1500,
+    timeoutMs: 120000
+);
 ```
 
-### Wait for Operation Completion
+### Session Keys
 
 ```php
-$finalStatus = $client->waitForOperation($operationId, [
-    'pollingInterval' => 2, // Check every 2 seconds
-    'maxAttempts' => 60, // Maximum 60 attempts (2 minutes)
-    'onStatusChange' => function ($status) {
-        echo "Operation state: {$status->state->value}\n";
-    }
+// Create session key
+$sessionKey = $client->createSessionKey(
+    account: $accountAddress,
+    permissions: ['transfer', 'approve'],
+    expiry: time() + 86400 // 24 hours
+);
+
+// Use session key
+$client->setSessionKey($sessionKey->privateKey);
+```
+
+### Gas Estimation
+
+```php
+$quote = $client->getQuote(
+    new QuoteRequest(
+        chain: Chain::ETHEREUM,
+        userOp: $userOp
+    )
+);
+
+echo "Estimated gas: " . $quote->estimatedGas;
+echo "Max fee: " . $quote->maxFee;
+```
+
+## 🧪 Testing
+
+```bash
+# Run tests
+composer test
+
+# Run with coverage
+composer test:coverage
+
+# Run specific test
+composer test -- --filter=testCreateAccount
+```
+
+## 🔧 Advanced Usage
+
+### Custom HTTP Client
+
+```php
+use GuzzleHttp\Client as HttpClient;
+
+$httpClient = new HttpClient([
+    'timeout' => 30,
+    'verify' => true,
 ]);
 
-if ($finalStatus->state === OperationState::SUCCESS) {
-    echo "Transaction successful: {$finalStatus->txHash}\n";
-} else {
-    echo "Transaction failed\n";
-}
+$client = new Client(
+    'https://api.vaultum.app',
+    Chain::ETHEREUM,
+    httpClient: $httpClient
+);
 ```
 
-## Error Handling
+### Batch Operations
+
+```php
+$batch = $client->batchOperations([
+    ['to' => $addr1, 'value' => $amount1],
+    ['to' => $addr2, 'value' => $amount2],
+]);
+```
+
+### Error Handling
 
 ```php
 use Vaultum\SDK\Exceptions\VaultumException;
 use Vaultum\SDK\Exceptions\ValidationException;
 
 try {
-    $quote = $client->quoteOp($request);
+    $result = $client->submitOperation($request);
 } catch (ValidationException $e) {
-    echo "Validation error: {$e->getMessage()}\n";
-    
-    foreach ($e->getErrors() as $field => $messages) {
-        echo "$field: " . implode(', ', $messages) . "\n";
-    }
+    echo "Validation error: " . $e->getMessage();
 } catch (VaultumException $e) {
-    echo "Error: {$e->getMessage()}\n";
-    echo "Status code: {$e->statusCode}\n";
+    echo "API error: " . $e->getMessage();
 }
 ```
 
-## Available Chains
+## 🌐 Supported Chains
 
 ```php
 use Vaultum\SDK\Enums\Chain;
 
-Chain::ETHEREUM
-Chain::POLYGON
-Chain::ARBITRUM
-Chain::OPTIMISM
-Chain::BASE
+Chain::ETHEREUM    // Ethereum Mainnet
+Chain::POLYGON     // Polygon
+Chain::ARBITRUM    // Arbitrum One
+Chain::OPTIMISM    // Optimism
+Chain::BASE        // Base
+Chain::AVALANCHE   // Avalanche C-Chain
+Chain::BSC         // BNB Smart Chain
 ```
 
-## Operation States
+## 📊 Requirements
 
-```php
-use Vaultum\SDK\Enums\OperationState;
+- PHP 8.2 or higher
+- Composer
+- ext-json
+- ext-openssl (for signature verification)
 
-OperationState::QUEUED  // Operation is in the queue
-OperationState::SENT    // Operation has been sent to the blockchain
-OperationState::SUCCESS // Operation completed successfully
-OperationState::FAILED  // Operation failed
-```
+## 🛡️ Security
 
-## DTOs (Data Transfer Objects)
+- All requests use HTTPS
+- API key authentication
+- Request signing for sensitive operations
+- Input validation and sanitization
 
-All request and response data is handled through strongly-typed DTOs:
+## 🤝 Contributing
 
-- `QuoteRequest` - Request for getting a quote
-- `QuoteResponse` - Response containing quote details
-- `SubmitRequest` - Request for submitting a UserOperation
-- `SubmitResponse` - Response containing operation ID
-- `StatusResponse` - Response containing operation status
-- `UserOperation` - ERC-4337 UserOperation structure
-- `Route` - Route information for cross-chain operations
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
-## Testing
+### Development Setup
 
 ```bash
+# Clone repository
+git clone https://github.com/vaultum/sdk-php
+cd sdk-php
+
 # Install dependencies
 composer install
 
 # Run tests
 composer test
+
+# Check code style
+composer cs-fix
 ```
 
-## Development
+## 📄 License
 
-### Running Tests
+MIT License - see [LICENSE](LICENSE) for details.
 
-```bash
-./vendor/bin/pest
-```
+## 🔗 Links
 
-### Code Standards
+- [Documentation](https://docs.vaultum.app/sdk-php)
+- [API Reference](https://api.vaultum.app/docs)
+- [Examples](https://github.com/vaultum/sdk-php/tree/main/examples)
+- [Packagist](https://packagist.org/packages/vaultum/sdk)
+- [Discord](https://discord.gg/vaultum)
 
-This SDK follows PSR-12 coding standards and uses strict typing throughout.
+---
 
-## License
-
-MIT
+Built with ❤️ by the Vaultum team
