@@ -1,5 +1,5 @@
 {
-    "name": "vaultum/sdk-php",
+    "name": "vaultum/sdk",
     "description": "PHP SDK for Vaultum cross-chain account abstraction wallet",
     "type": "library",
     "license": "MIT",
