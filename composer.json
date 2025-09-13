@@ -1,0 +1,42 @@
+{
+    "name": "vaultum/sdk-php",
+    "description": "PHP SDK for Vaultum cross-chain account abstraction wallet",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Vaultum Team",
+            "email": "sdk@vaultum.io"
+        }
+    ],
+    "require": {
+        "php": "^8.3",
+        "guzzlehttp/guzzle": "^7.0",
+        "ramsey/uuid": "^4.0"
+    },
+    "require-dev": {
+        "pestphp/pest": "^3.0",
+        "mockery/mockery": "^1.6"
+    },
+    "autoload": {
+        "psr-4": {
+            "Vaultum\\SDK\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Vaultum\\SDK\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "vendor/bin/pest"
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
