@@ -1,10 +1,8 @@
-# Vaultum PHP SDK
+# Vaultum SDK for PHP
 
-![Tests](https://github.com/vaultum/sdk-php/workflows/PHP%20SDK%20Tests/badge.svg)
-[![Latest Stable Version](https://poser.pugx.org/vaultum/sdk/v)](https://packagist.org/packages/vaultum/sdk)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+PHP SDK for Vaultum Smart Account - ERC-4337 Account Abstraction Wallet
 
-## 📦 Installation
+## Installation
 
 Install via Composer:
 
@@ -12,275 +10,196 @@ Install via Composer:
 composer require vaultum/sdk
 ```
 
-## 🚀 Quick Start
+## Quick Start
 
 ```php
 <?php
-require 'vendor/autoload.php';
+require_once 'vendor/autoload.php';
 
-use Vaultum\SDK\Client;
-use Vaultum\SDK\Enums\Chain;
+use VaultumSDK\Configuration;
+use VaultumSDK\ApiException;
+use VaultumSDK\Api\AccountApi;
+use VaultumSDK\Api\UserOpApi;
 
-// Initialize client
-$client = new Client(
-    'https://api.vaultum.app',
-    Chain::ETHEREUM
-);
+// Configure API client
+$config = Configuration::getDefaultConfiguration()
+    ->setApiKey('Authorization', 'your-api-key')
+    ->setApiKeyPrefix('Authorization', 'Bearer');
 
-// Create a smart account
-$account = $client->createAccount(
-    owner: '0xYourAddress',
-    modules: ['sessionKeys', 'spendingLimits']
-);
+// Initialize APIs
+$accountApi = new AccountApi(null, $config);
+$userOpApi = new UserOpApi(null, $config);
 
-// Build a user operation
-$userOp = $client->buildUserOperation([
-    'account' => $account->address,
-    'to' => '0xRecipient',
-    'value' => '1000000000000000000', // 1 ETH
-    'data' => '0x',
-]);
+// Deploy a smart account
+try {
+    $deployRequest = [
+        'owner' => '0x...',
+        'modules' => ['social-recovery', 'session-keys', 'spending-limits']
+    ];
+    $account = $accountApi->deployAccount($deployRequest);
+    echo "Account deployed at: " . $account->getAddress() . "\n";
+} catch (ApiException $e) {
+    echo "Error: " . $e->getMessage() . "\n";
+}
 
-// Submit the operation
-$result = $client->submitUserOperation($userOp);
-
-// Wait for confirmation
-$receipt = $client->waitForOperation($result->id);
+// Submit a UserOperation
+try {
+    $userOp = [
+        'account' => $account->getAddress(),
+        'calls' => [
+            [
+                'to' => '0x...',
+                'value' => '0',
+                'data' => '0x...'
+            ]
+        ]
+    ];
+    $opId = $userOpApi->submitUserOp($userOp);
+    echo "Operation ID: " . $opId->getId() . "\n";
+} catch (ApiException $e) {
+    echo "Error: " . $e->getMessage() . "\n";
+}
 ```
 
-## ✨ Features
+## Features
 
-- **Type Safety** - Full PHP 8.2+ type hints and enums
-- **PSR Compliance** - PSR-4 autoloading, PSR-7 HTTP
-- **Account Abstraction** - ERC-4337 UserOperation support
-- **Session Keys** - Temporary key management
-- **Gas Abstraction** - Paymaster integration
-- **Multi-chain** - Support for multiple EVM chains
-- **Async Support** - Compatible with ReactPHP/Amp
+- 🔐 **Smart Account Management**: Deploy and manage ERC-4337 smart accounts
+- 🔑 **Session Keys**: Grant time-bound, limited permissions
+- 👥 **Social Recovery**: Recover accounts with guardian approvals
+- 💰 **Spending Limits**: Set daily spending caps per token
+- ⛽ **Gasless Transactions**: Submit UserOps with paymaster support
+- 🔗 **Cross-chain Support**: Works on Ethereum, Polygon, Arbitrum, Optimism, Base
 
-## 📚 API Reference
-
-### Client
-
-The main client for interacting with Vaultum.
-
-```php
-use Vaultum\SDK\Client;
-use Vaultum\SDK\Enums\Chain;
-
-$client = new Client(
-    string $apiUrl,
-    Chain $chain,
-    ?string $apiKey = null
-);
-```
+## API Reference
 
 ### Account Management
 
-#### Create Account
-
 ```php
-$account = $client->createAccount(
-    string $owner,
-    array $modules = [],
-    ?string $salt = null
-);
+// Deploy new account
+$account = $accountApi->deployAccount($params);
+
+// Get account info
+$info = $accountApi->getAccount($address);
 ```
 
-#### Get Account
+### UserOperations
 
 ```php
-$account = $client->getAccount(string $address);
+// Submit UserOp
+$opId = $userOpApi->submitUserOp($userOp);
+
+// Get status
+$status = $userOpApi->getOpStatus($opId);
+
+// Wait for completion
+$receipt = $userOpApi->waitForOp($opId);
 ```
 
-### User Operations
-
-#### Build UserOperation
+### Recovery Module
 
 ```php
-use Vaultum\SDK\DTO\UserOperation;
+// Initiate recovery
+$recoveryApi->initiateRecovery($account, $newOwner);
 
-$userOp = $client->buildUserOperation([
-    'account' => '0x...',
-    'to' => '0x...',
-    'value' => '1000000000000000000',
-    'data' => '0x',
-]);
-```
+// Support recovery
+$recoveryApi->supportRecovery($account, $nonce);
 
-#### Submit UserOperation
+// Execute recovery
+$recoveryApi->executeRecovery($account, $nonce);
 
-```php
-use Vaultum\SDK\DTO\SubmitRequest;
-
-$request = new SubmitRequest(
-    chain: Chain::ETHEREUM,
-    userOp: $userOp,
-    signature: $signature
-);
-
-$response = $client->submitOperation($request);
-echo "Operation ID: " . $response->id;
-```
-
-#### Wait for Operation
-
-```php
-use Vaultum\SDK\WaitForOp;
-
-$result = WaitForOp::run(
-    $client,
-    $operationId,
-    intervalMs: 1500,
-    timeoutMs: 120000
-);
+// Get recovery status
+$status = $recoveryApi->getRecoveryStatus($account);
 ```
 
 ### Session Keys
 
 ```php
-// Create session key
-$sessionKey = $client->createSessionKey(
-    account: $accountAddress,
-    permissions: ['transfer', 'approve'],
-    expiry: time() + 86400 // 24 hours
-);
+// Grant session key
+$sessionApi->grantSessionKey($account, $key, $expiry, $selectors);
 
-// Use session key
-$client->setSessionKey($sessionKey->privateKey);
+// Revoke session key
+$sessionApi->revokeSessionKey($account, $key);
+
+// Update selectors
+$sessionApi->updateSelectors($account, $key, $selectors);
 ```
 
-### Gas Estimation
+### Spending Limits
 
 ```php
-$quote = $client->getQuote(
-    new QuoteRequest(
-        chain: Chain::ETHEREUM,
-        userOp: $userOp
-    )
-);
+// Set limit
+$limitsApi->setSpendingLimit($account, $token, $cap);
 
-echo "Estimated gas: " . $quote->estimatedGas;
-echo "Max fee: " . $quote->maxFee;
+// Get limits status
+$status = $limitsApi->getLimitsStatus($account);
+
+// Enable owner bypass
+$limitsApi->enableOwnerBypass($account, $duration);
 ```
 
-## 🧪 Testing
+## Configuration
 
-```bash
-# Run tests
-composer test
+### Authentication
 
-# Run with coverage
-composer test:coverage
-
-# Run specific test
-composer test -- --filter=testCreateAccount
-```
-
-## 🔧 Advanced Usage
-
-### Custom HTTP Client
+The SDK uses Bearer token authentication:
 
 ```php
-use GuzzleHttp\Client as HttpClient;
-
-$httpClient = new HttpClient([
-    'timeout' => 30,
-    'verify' => true,
-]);
-
-$client = new Client(
-    'https://api.vaultum.app',
-    Chain::ETHEREUM,
-    httpClient: $httpClient
-);
+$config = Configuration::getDefaultConfiguration()
+    ->setApiKey('Authorization', 'your-api-key')
+    ->setApiKeyPrefix('Authorization', 'Bearer');
 ```
 
-### Batch Operations
+### Custom API Endpoint
 
 ```php
-$batch = $client->batchOperations([
-    ['to' => $addr1, 'value' => $amount1],
-    ['to' => $addr2, 'value' => $amount2],
-]);
+$config = Configuration::getDefaultConfiguration()
+    ->setHost('https://api.vaultum.io');
 ```
 
-### Error Handling
+### Request Timeout
 
 ```php
-use Vaultum\SDK\Exceptions\VaultumException;
-use Vaultum\SDK\Exceptions\ValidationException;
-
-try {
-    $result = $client->submitOperation($request);
-} catch (ValidationException $e) {
-    echo "Validation error: " . $e->getMessage();
-} catch (VaultumException $e) {
-    echo "API error: " . $e->getMessage();
-}
+$config = Configuration::getDefaultConfiguration()
+    ->setApiKey('Authorization', 'your-api-key')
+    ->setApiKeyPrefix('Authorization', 'Bearer')
+    ->setTempFolderPath(sys_get_temp_dir())
+    ->setDebug(true);
 ```
 
-## 🌐 Supported Chains
+## Networks Supported
 
-```php
-use Vaultum\SDK\Enums\Chain;
+- Ethereum Mainnet
+- Ethereum Sepolia (testnet)
+- Polygon
+- Arbitrum
+- Optimism
+- Base
 
-Chain::ETHEREUM    // Ethereum Mainnet
-Chain::POLYGON     // Polygon
-Chain::ARBITRUM    // Arbitrum One
-Chain::OPTIMISM    // Optimism
-Chain::BASE        // Base
-Chain::AVALANCHE   // Avalanche C-Chain
-Chain::BSC         // BNB Smart Chain
-```
+## Requirements
 
-## 📊 Requirements
-
-- PHP 8.2 or higher
-- Composer
+- PHP 8.1 or higher
+- ext-curl
 - ext-json
-- ext-openssl (for signature verification)
+- ext-mbstring
 
-## 🛡️ Security
+## Testing
 
-- All requests use HTTPS
-- API key authentication
-- Request signing for sensitive operations
-- Input validation and sanitization
-
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
-
-### Development Setup
+Run the test suite:
 
 ```bash
-# Clone repository
-git clone https://github.com/vaultum/sdk-php
-cd sdk-php
-
-# Install dependencies
-composer install
-
-# Run tests
 composer test
-
-# Check code style
-composer cs-fix
 ```
 
-## 📄 License
+## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+MIT
 
-## 🔗 Links
+## Links
 
-- [Documentation](https://docs.vaultum.app/sdk-php)
-- [API Reference](https://api.vaultum.app/docs)
-- [Examples](https://github.com/vaultum/sdk-php/tree/main/examples)
-- [Packagist](https://packagist.org/packages/vaultum/sdk)
-- [Discord](https://discord.gg/vaultum)
+- [GitHub Repository](https://github.com/vaultum/vaultum)
+- [Documentation](https://docs.vaultum.io)
+- [Packagist Package](https://packagist.org/packages/vaultum/sdk)
 
----
+## Support
 
-Built with ❤️ by the Vaultum team
+For issues and feature requests, please visit our [GitHub Issues](https://github.com/vaultum/vaultum/issues).
