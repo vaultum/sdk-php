@@ -11,12 +11,12 @@
         "sdk",
         "api"
     ],
-    "homepage": "https://github.com/vaultum/vaultum",
+    "homepage": "https://github.com/vaultum/sdk-php#readme",
     "license": "MIT",
     "authors": [
         {
             "name": "Vaultum Team",
-            "homepage": "https://github.com/vaultum"
+            "homepage": "https://github.com/vaultum/sdk-php"
         }
     ],
     "require": {
